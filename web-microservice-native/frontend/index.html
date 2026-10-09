@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard E-Commerce Mikroservis</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background-color: #eef2f3; color: #333; }
+        header { background: #2c3e50; color: white; padding: 20px; text-align: center; border-radius: 8px; margin-bottom: 20px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr 1.5fr; gap: 20px; }
+        .card { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        h2 { border-bottom: 2px solid #3498db; padding-bottom: 10px; margin-top: 0; }
+        .btn { background: #3498db; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; transition: 0.2s; }
+        .btn:hover { background: #2980b9; }
+        .btn-danger { background: #e74c3c; }
+        .btn-danger:hover { background: #c0392b; }
+        .btn-success { background: #27ae60; margin-top: 15px; }
+        .btn-success:hover { background: #219653; }
+        .product-item { background: #f9f9f9; padding: 15px; border: 1px solid #eee; border-radius: 6px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .price { color: #27ae60; font-weight: bold; }
+        select, input { width: 100%; padding: 10px; margin-top: 5px; margin-bottom: 15px; border-radius: 5px; border: 1px solid #ccc; box-sizing: border-box; }
+        .total-section { font-size: 1.2em; font-weight: bold; text-align: right; margin-top: 15px; border-top: 1px dashed #ccc; padding-top: 10px; }
+        .form-tambah { background: #fcfcfc; padding: 15px; border: 1px dashed #3498db; border-radius: 6px; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>🛒 Aplikasi E-Commerce (Arsitektur Mikroservis Native)</h1>
+    </header>
+    
+    <div class="grid">
+        <!-- SEKTOR 1: Profil Pengguna (Port 5001) -->
+        <div class="card">
+            <h2>👤 Profil Pengguna</h2>
+            <div id="user-info">Memuat data pengguna...</div>
+            <br>
+            <label for="pilih-akun"><strong>Ganti Akun Pelanggan:</strong></label>
+            <select id="pilih-akun" onchange="gantiAkun(this.value)">
+                <option value="1">Budi Santoso (ID: 1)</option>
+                <option value="2">Siti Aminah (ID: 2)</option>
+                <option value="3">Andi Wijaya (ID: 3)</option>
+                <option value="4">Dewi Sartika (ID: 4)</option>
+            </select>
+        </div>
+
+        <!-- SEKTOR 2: Keranjang Belanja (Port 5001) -->
+        <div class="card">
+            <h2>🛒 Produk Pilihan (Keranjang)</h2>
+            <div id="cart-list">Keranjang kosong.</div>
+            <div id="total-harga" class="total-section">Total: Rp 0</div>
+            <button class="btn btn-success" onclick="prosesCheckout()">Check Out Sekarang</button>
+        </div>
+
+        <!-- SEKTOR 3: Daftar Produk & Fitur Tambah Produk (Port 5002) -->
+        <div class="card">
+            <h2>📦 Produk Tersedia</h2>
+            
+            <!-- FORMULIR INPUT PRODUK BARU -->
+            <div class="form-tambah">
+                <h3>➕ Tambah Produk ke Toko</h3>
+                <label>Nama Produk:</label>
+                <input type="text" id="input-nama-produk" placeholder="Contoh: Keyboard Mechanical">
+                
+                <label>Harga Produk (Rp):</label>
+                <input type="number" id="input-harga-produk" placeholder="Contoh: 450000">
+                
+                <button class="btn" onclick="tambahProdukKeToko()">Masukkan ke Daftar Toko</button>
+            </div>
+
+            <div id="product-list">Memuat daftar produk...</div>
+        </div>
+    </div>
+
+    <script>
+        let currentUserId = 1;
+        let listItemKeranjang = []; // Variabel global penampung keranjang
+
+        // 1. Memuat Informasi Pengguna & Keranjang
+        function muatDataPengguna(id) {
+            currentUserId = id;
+            fetch(`http://localhost:5001/?id=${id}`)
+                .then(res => res.json())
+                .then(user => {
+                    document.getElementById('user-info').innerHTML = `
+                        <p><strong>Nama:</strong> ${user.nama}</p>
+                        <p><strong>Email:</strong> ${user.email}</p>
+                        <p><strong>Status:</strong> <span style="background:#f1c40f; padding:2px 6px; border-radius:4px;">${user.peran}</span></p>
+                    `;
+                    listItemKeranjang = user.keranjang || [];
+                    perbaruiTampilanKeranjang(listItemKeranjang);
+                })
+                .catch(err => console.error("Gagal terhubung ke User Service"));
+        }
+
+        function perbaruiTampilanKeranjang(keranjang) {
+            const container = document.getElementById('cart-list');
+            const totalText = document.getElementById('total-harga');
+            container.innerHTML = '';
+            
+            if (!keranjang || keranjang.length === 0) {
+                container.innerHTML = '<div>Keranjang belanja kosong.</div>';
+                totalText.innerText = 'Total: Rp 0';
+                return;
+            }
+
+            let total = 0;
+            keranjang.forEach(item => {
+                total += item.harga;
+                const div = document.createElement('div');
+                div.className = 'product-item';
+                div.innerHTML = `
+                    <div><strong>${item.nama}</strong><br><span class="price">Rp ${item.harga.toLocaleString('id-ID')}</span></div>
+                    <button class="btn btn-danger" style="width:auto; padding:5px 10px;" onclick="hapusDariKeranjang('${item.id_produk}')">Hapus</button>
+                `;
+                container.appendChild(div);
+            });
+            totalText.innerText = `Total: Rp ${total.toLocaleString('id-ID')}`;
+        }
+
+        function tambahKeKeranjang(nama, harga) {
+            fetch(`http://localhost:5001/?id=${currentUserId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nama: nama, harga: harga })
+            })
+            .then(res => res.json())
+            .then(userUpdated => {
+                listItemKeranjang = userUpdated.keranjang || [];
+                perbaruiTampilanKeranjang(listItemKeranjang);
+            });
+        }
+
+        function hapusDariKeranjang(idProduk) {
+            fetch(`http://localhost:5001/?id=${currentUserId}`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id_produk: idProduk })
+            })
+            .then(res => res.json())
+            .then(userUpdated => {
+                listItemKeranjang = userUpdated.keranjang || [];
+                perbaruiTampilanKeranjang(listItemKeranjang);
+            });
+        }
+
+        function gantiAkun(idBaru) {
+            muatDataPengguna(idBaru);
+        }
+
+        // FUNGSI BARU: Proses Checkout Massal Terhubung Server
+        function prosesCheckout() {
+            if (listItemKeranjang.length === 0) {
+                alert("Keranjang belanja Anda masih kosong! Silakan pilih produk terlebih dahulu.");
+                return;
+            }
+
+            let daftarBelanjaan = listItemKeranjang.map((item, index) => `${index + 1}. ${item.nama}`).join("\n");
+            let totalBayar = document.getElementById('total-harga').innerText;
+
+            let konfirmasi = confirm(`Apakah Anda yakin ingin checkout semua produk ini?\n\n${daftarBelanjaan}\n\n${totalBayar}`);
+            
+            if (konfirmasi) {
+                // Menembak rute penanganan checkout massal di backend
+                fetch(`http://localhost:5001/?id=${currentUserId}&action=checkout`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                })
+                .then(res => res.json())
+                .then(userUpdated => {
+                    alert("🎉 Transaksi Berhasil!\nSemua produk di atas telah sukses diproses.");
+                    listItemKeranjang = [];
+                    perbaruiTampilanKeranjang(listItemKeranjang);
+                })
+                .catch(err => alert("Gagal memproses checkout ke server."));
+            }
+        }
+
+        // ==========================================
+        // MANAJEMEN PRODUK GLOBAL (PORT 5002)
+        // ==========================================
+
+        function perbaruiDaftarProdukToko(products) {
+            const container = document.getElementById('product-list');
+            container.innerHTML = '';
+            products.forEach(prod => {
+                const item = document.createElement('div');
+                item.className = 'product-item';
+                item.innerHTML = `
+                    <div><strong>${prod.nama}</strong><br><span class="price">Rp ${parseInt(prod.harga).toLocaleString('id-ID')}</span></div>
+                    <button class="btn" style="width:auto;" onclick="tambahKeKeranjang('${prod.nama}', ${prod.harga})">Pilih</button>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        function muatSemuaProduk() {
+            fetch('http://localhost:5002/')
+                .then(res => res.json())
+                .then(products => perbaruiDaftarProdukToko(products))
+                .catch(err => console.error("Gagal terhubung ke Product Service"));
+        }
+
+        muatSemuaProduk();
+        muatDataPengguna(currentUserId);
+    </script>
+</body>
+</html>

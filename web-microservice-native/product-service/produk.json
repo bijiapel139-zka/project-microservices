@@ -1,0 +1,32 @@
+[
+    {
+        "id": 101,
+        "nama": "Laptop Asus",
+        "harga": 8500000
+    },
+    {
+        "id": 102,
+        "nama": "Mouse Logitech",
+        "harga": 250000
+    },
+    {
+        "id": 103,
+        "nama": "Keyboard Mechanical",
+        "harga": 450000
+    },
+    {
+        "id": 104,
+        "nama": "Monitor Samsung",
+        "harga": 1500000
+    },
+    {
+        "id": 105,
+        "nama": "Headset Razer",
+        "harga": 750000
+    },
+    {
+        "id": 106,
+        "nama": "Kursi Gaming",
+        "harga": 1000000
+    }
+]
