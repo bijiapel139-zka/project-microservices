@@ -1,0 +1,5 @@
+# File data yang dibuat otomatis oleh PHP saat dijalankan.
+# Jangan ikut ke Git supaya data uji coba nggak bikin konflik merge.
+# Kalau nggak ada, index.php bikin ulang dari data awal.
+product-service/produk.json
+user-service/users.json
