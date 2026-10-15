@@ -1,4 +1,8 @@
 <?php
+// Atur zona waktu ke WIB supaya jam di struk sesuai jam di Indonesia.
+// Tanpa ini, PHP biasanya pakai UTC (selisih 7 jam).
+date_default_timezone_set('Asia/Jakarta');
+
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type");
@@ -49,17 +53,74 @@ if (!array_key_exists($userId, $users)) {
     exit;
 }
 
-// RUTE 1: Ambil profil + isi keranjang (GET)
+// RUTE 1: Ambil data lewat GET.
+// Ada dua "loket" di pintu yang sama, dibedakan oleh parameter ?action=
 if ($method === 'GET') {
+
+    // Loket 1: ?action=riwayat -> cuma kirim daftar struk
+    // Frontend: "Kasir, minta map struk punya pelanggan nomor 1 aja."
+    // Backend:  "Ini, Kak. Profil dan keranjangnya nggak ikut."
+    if (isset($_GET['action']) && $_GET['action'] === 'riwayat') {
+
+        // '??' artinya: pakai isi laci 'riwayat' kalau ada,
+        // kalau belum ada (user belum pernah checkout) kasih array kosong [].
+        // Jadi frontend nggak pernah dapat error, paling banter daftar kosong.
+        $riwayat = $users[$userId]['riwayat'] ?? [];
+
+        echo json_encode($riwayat);
+        exit;
+    }
+
+    // Loket 2 (bawaan): tanpa action -> kirim profil + keranjang seperti biasa
     echo json_encode($users[$userId]);
     exit;
 }
 
 // RUTE 2: Tambah produk ke keranjang ATAU checkout (POST)
 if ($method === 'POST') {
-    // 2.1 Checkout massal: ?action=checkout -> kosongkan keranjang
+        // 2.1 Checkout massal: ?action=checkout
+    // Sekarang: salin isi keranjang jadi "struk" di riwayat, BARU kosongkan keranjang.
     if (isset($_GET['action']) && $_GET['action'] === 'checkout') {
+
+        // Ambil isi keranjang user saat ini (ibarat isi troli di meja kasir)
+        $keranjang = $users[$userId]['keranjang'];
+
+        // Penjaga: keranjang kosong nggak boleh di-checkout.
+        // Frontend: "Kasir, tolong proses troli ini!"
+        // Backend:  "Trolinya kosong, Kak. Nggak ada yang bisa dibuat struk."
+        if (count($keranjang) === 0) {
+            http_response_code(400);
+            echo json_encode(["pesan" => "Keranjang masih kosong"]);
+            exit;
+        }
+
+        // Hitung total belanja dengan menjumlah harga tiap item
+        $total = 0;
+        foreach ($keranjang as $item) {
+            $total += $item['harga'];
+        }
+
+        // Susun "struk" pesanan
+        $pesananBaru = [
+            "id_pesanan" => "ORD-" . time(),          // nomor struk unik berbasis waktu
+            "tanggal"    => date("Y-m-d H:i:s"),      // kapan checkout terjadi
+            "item"       => $keranjang,               // salinan isi keranjang (fotokopi struk)
+            "total"      => $total                    // total yang dibayar
+        ];
+
+        // Kalau user ini belum punya laci "riwayat" (data lama di users.json),
+        // buatkan dulu laci kosong supaya nggak error.
+        if (!isset($users[$userId]['riwayat'])) {
+            $users[$userId]['riwayat'] = [];
+        }
+
+        // array_unshift = taruh struk baru di PALING DEPAN,
+        // jadi pesanan terbaru selalu muncul paling atas.
+        array_unshift($users[$userId]['riwayat'], $pesananBaru);
+
+        // Setelah struk aman tersimpan, baru kosongkan keranjangnya
         $users[$userId]['keranjang'] = [];
+
         simpanUsers($fileUsers, $users);
         echo json_encode($users[$userId]);
         exit;
@@ -88,3 +149,4 @@ if ($method === 'DELETE') {
 
     if (isset($data['id_produk'])) {
         $keranjangBaru = [];
+    }}

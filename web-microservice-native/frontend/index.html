@@ -21,7 +21,12 @@
         select, input { width: 100%; padding: 10px; margin-top: 5px; margin-bottom: 15px; border-radius: 5px; border: 1px solid #ccc; box-sizing: border-box; }
         .total-section { font-size: 1.2em; font-weight: bold; text-align: right; margin-top: 15px; border-top: 1px dashed #ccc; padding-top: 10px; }
         .form-tambah { background: #fcfcfc; padding: 15px; border: 1px dashed #3498db; border-radius: 6px; margin-bottom: 20px; }
-    </style>
+           /* Gaya kartu struk di riwayat pesanan */
+        .struk { background: #f9f9f9; border: 1px solid #eee; border-left: 4px solid #3498db; border-radius: 6px; padding: 15px; margin-bottom: 12px; }
+        .struk-header { display: flex; justify-content: space-between; font-size: 0.9em; color: #666; margin-bottom: 8px; }
+        .struk ul { margin: 0; padding-left: 20px; }
+        .struk-total { text-align: right; font-weight: bold; color: #27ae60; margin-top: 8px; border-top: 1px dashed #ccc; padding-top: 8px; }
+   </style>
 </head>
 <body>
 
@@ -71,7 +76,11 @@
             <div id="product-list">Memuat daftar produk...</div>
         </div>
     </div>
-
+<!-- SEKTOR 4: Riwayat Pesanan (data dari User Service, Port 5001) -->
+<div class="card" style="margin-top: 20px;">
+    <h2>🧾 Riwayat Pesanan</h2>
+    <div id="riwayat-list">Memuat riwayat...</div>
+</div>
     <script>
         let currentUserId = 1;
         let listItemKeranjang = []; // Variabel global penampung keranjang
@@ -89,6 +98,7 @@
                     `;
                     listItemKeranjang = user.keranjang || [];
                     perbaruiTampilanKeranjang(listItemKeranjang);
+                    muatRiwayatPesanan();
                 })
                 .catch(err => console.error("Gagal terhubung ke User Service"));
         }
@@ -148,6 +158,50 @@
             muatDataPengguna(idBaru);
         }
 
+            // ==========================================
+            // RIWAYAT PESANAN (User Service, Port 5001)
+            // ==========================================
+
+            // Fungsi ini ibarat pelanggan yang minta "map struk" ke kasir lalu
+            // menatanya di rak tampilan.
+            function muatRiwayat(id) {
+                // Frontend: "Kasir, minta map struk punya pelanggan nomor sekian."
+                // Backend:  "Ini, Kak" (rute ?action=riwayat dari Langkah 2).
+                fetch(`http://localhost:5001/?id=${id}&action=riwayat`)
+                    .then(res => res.json())
+                    .then(riwayat => {
+                        const container = document.getElementById('riwayat-list');
+                        container.innerHTML = '';
+
+                        // Kalau map-nya kosong, kasih pesan ramah lalu berhenti.
+                        if (!riwayat || riwayat.length === 0) {
+                            container.innerHTML = '<div>Belum ada pesanan.</div>';
+                            return;
+                        }
+
+                        // Satu struk = satu kotak. Kita ulang untuk setiap struk di map.
+                        riwayat.forEach(pesanan => {
+                            // Ubah daftar item jadi baris <li>
+                            const daftarItem = pesanan.item
+                                .map(it => `<li>${it.nama} - Rp ${it.harga.toLocaleString('id-ID')}</li>`)
+                                .join('');
+
+                            const div = document.createElement('div');
+                            div.className = 'struk';
+                            div.innerHTML = `
+                            <div class="struk-header">
+                                <span><strong>${pesanan.id_pesanan}</strong></span>
+                                <span>${pesanan.tanggal}</span>
+                            </div>
+                            <ul>${daftarItem}</ul>
+                            <div class="struk-total">Total: Rp ${pesanan.total.toLocaleString('id-ID')}</div>
+                        `;
+                            container.appendChild(div);
+                        });
+                    })
+                    .catch(err => console.error("Gagal memuat riwayat dari User Service"));
+            }
+
         // FUNGSI BARU: Proses Checkout Massal Terhubung Server
         function prosesCheckout() {
             if (listItemKeranjang.length === 0) {
@@ -171,6 +225,7 @@
                     alert("🎉 Transaksi Berhasil!\nSemua produk di atas telah sukses diproses.");
                     listItemKeranjang = [];
                     perbaruiTampilanKeranjang(listItemKeranjang);
+                    muatRiwayat(currentUserId);   
                 })
                 .catch(err => alert("Gagal memproses checkout ke server."));
             }
