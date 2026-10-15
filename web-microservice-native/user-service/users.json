@@ -1,0 +1,36 @@
+{
+    "1": {
+        "id": 1,
+        "nama": "Budi Santoso",
+        "email": "budi@email.com",
+        "peran": "Pelanggan VIP",
+        "keranjang": [
+            {
+                "id_produk": "11111792049318",
+                "nama": "Laptop Asus",
+                "harga": 8500000
+            }
+        ]
+    },
+    "2": {
+        "id": 2,
+        "nama": "Siti Aminah",
+        "email": "siti@email.com",
+        "peran": "Pelanggan Reguler",
+        "keranjang": []
+    },
+    "3": {
+        "id": 3,
+        "nama": "Andi Wijaya",
+        "email": "andi@email.com",
+        "peran": "Pelanggan Reguler",
+        "keranjang": []
+    },
+    "4": {
+        "id": 4,
+        "nama": "Dewi Sartika",
+        "email": "dewi@email.com",
+        "peran": "Pelanggan Reguler",
+        "keranjang": []
+    }
+}
