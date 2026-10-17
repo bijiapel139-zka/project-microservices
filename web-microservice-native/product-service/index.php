@@ -29,8 +29,33 @@ if (!file_exists($fileJson)) {
 $products = json_decode(file_get_contents($fileJson), true);
 $method = $_SERVER['REQUEST_METHOD'];
 
-// RUTE 1: Mengambil Semua Daftar Produk
+// RUTE 1: Ambil data produk lewat GET.
+//  - Tanpa ?id      -> semua produk (seperti dulu, frontend nggak terganggu)
+//  - Dengan ?id=101 -> hanya SATU produk
+// Nanti User Service memakai ini buat "menanyakan" nama dan harga asli produk.
 if ($method === 'GET') {
+
+    if (isset($_GET['id'])) {
+        // (int) mengubah teks jadi angka. Kalau bukan angka (misal "abc"), hasilnya 0.
+        $idDicari = (int)$_GET['id'];
+
+        // User Service: "Gudang, ada produk nomor 101?"
+        // Product Service: cek rak satu per satu sampai ketemu.
+        foreach ($products as $produk) {
+            if ((int)$produk['id'] === $idDicari) {
+                echo json_encode($produk);   // ketemu -> serahkan produk ini saja
+                exit;
+            }
+        }
+
+        // Sampai rak terakhir nggak ketemu -> jawab jelas, bukan halaman kosong.
+        // 404 = kode standar "yang dicari nggak ada".
+        http_response_code(404);
+        echo json_encode(["pesan" => "Produk dengan ID $idDicari tidak ditemukan"]);
+        exit;
+    }
+
+    // Tanpa ?id -> kirim semua produk
     echo json_encode($products);
     exit;
 }

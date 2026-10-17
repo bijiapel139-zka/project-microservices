@@ -50,17 +50,27 @@ function perbaruiTampilanKeranjang(keranjang) {
     totalText.innerText = `Total: Rp ${total.toLocaleString('id-ID')}`;
 }
 
-function tambahKeKeranjang(nama, harga) {
+// Sekarang cukup kirim NOMOR produk. Nama dan harga dicari sendiri oleh User Service.
+function tambahKeKeranjang(produkId) {
     fetch(`http://localhost:5001/?id=${currentUserId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nama: nama, harga: harga })
+        body: JSON.stringify({ produk_id: produkId })
     })
-    .then(res => res.json())
-    .then(userUpdated => {
-        listItemKeranjang = userUpdated.keranjang || [];
+    .then(async res => {
+        const data = await res.json();
+
+        // res.ok = false kalau server membalas error (400/404/503).
+        // Tampilkan pesan dan berhenti, jangan sampai keranjang tampil kosong.
+        if (!res.ok) {
+            alert(data.pesan || "Gagal menambah ke keranjang");
+            return;
+        }
+
+        listItemKeranjang = data.keranjang || [];
         perbaruiTampilanKeranjang(listItemKeranjang);
-    });
+    })
+    .catch(err => alert("Gagal terhubung ke User Service"));
 }
 
 function hapusDariKeranjang(idProduk) {
@@ -158,7 +168,7 @@ function perbaruiDaftarProdukToko(products) {
         item.className = 'product-item';
         item.innerHTML = `
             <div><strong>${prod.nama}</strong><br><span class="price">Rp ${parseInt(prod.harga).toLocaleString('id-ID')}</span></div>
-            <button class="btn" style="width:auto;" onclick="tambahKeKeranjang('${prod.nama}', ${prod.harga})">Pilih</button>
+            <button class="btn" style="width:auto;" onclick="tambahKeKeranjang(${prod.id})">Pilih</button>
         `;
         container.appendChild(item);
     });

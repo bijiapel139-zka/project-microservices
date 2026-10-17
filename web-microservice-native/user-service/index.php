@@ -41,6 +41,43 @@ if (!file_exists($fileUsers)) {
     simpanUsers($fileUsers, $dataAwal);
 }
 
+// Alamat Product Service. Ibarat nomor telepon gudang di sebelah.
+const PRODUCT_SERVICE_URL = 'http://localhost:5002/';
+
+// Fungsi ini "menelepon" Product Service buat nanya detail SATU produk.
+// Hasilnya selalu berupa array: ['status' => kode, 'data' => isi jawaban]
+//   status 200 = produk ketemu
+//   status 404 = produk nggak ada di gudang
+//   status 503 = gudangnya nggak bisa dihubungi sama sekali (service mati)
+function ambilProduk($produkId) {
+    $url = PRODUCT_SERVICE_URL . '?id=' . urlencode($produkId);
+
+    $opsi = stream_context_create([
+        'http' => [
+            'timeout'       => 3,     // nunggu maksimal 3 detik, jangan menggantung selamanya
+            'ignore_errors' => true   // tetap baca isi jawaban walau kodenya 404
+        ]
+    ]);
+
+    // User Service: "Halo gudang, produk nomor 101 ada?"
+    // Tanda @ menyembunyikan peringatan PHP, errornya kita tangani sendiri di bawah.
+    $jawaban = @file_get_contents($url, false, $opsi);
+
+    // false = telepon nggak tersambung (Product Service mati / salah alamat)
+    if ($jawaban === false) {
+        return ['status' => 503, 'data' => null];
+    }
+
+    // Baris pertama header jawaban berbentuk "HTTP/1.1 404 Not Found".
+    // Kita ambil angka 3 digitnya (kode status).
+    $status = 200;
+    if (isset($http_response_header[0]) && preg_match('/\s(\d{3})\s/', $http_response_header[0], $cocok)) {
+        $status = (int)$cocok[1];
+    }
+
+    return ['status' => $status, 'data' => json_decode($jawaban, true)];
+}
+
 $users  = bacaUsers($fileUsers);
 $userId = isset($_GET['id']) ? (int)$_GET['id'] : 1;
 $method = $_SERVER['REQUEST_METHOD'];
@@ -118,23 +155,54 @@ if ($method === 'POST') {
         exit;
     }
 
-    // 2.2 Tambah produk ke keranjang
+    // 2.2 Tambah produk ke keranjang.
+    // Sekarang frontend cukup kirim NOMOR produk: {"produk_id": 101}
+    // Nama dan harga TIDAK lagi dipercaya dari frontend, kita tanya langsung ke Product Service.
     $data = json_decode(file_get_contents('php://input'), true);
-    if (isset($data['nama']) && isset($data['harga'])) {
-        $users[$userId]['keranjang'][] = [
-            "id_produk" => uniqid(),            // ID unik supaya hapus 1 item nggak salah target
-            "nama"      => htmlspecialchars($data['nama']),
-            "harga"     => (int)$data['harga']
-        ];
-        simpanUsers($fileUsers, $users);
-        echo json_encode($users[$userId]);
-    } else {
+
+    if (!isset($data['produk_id']) || !is_numeric($data['produk_id'])) {
         http_response_code(400);
-        echo json_encode(["pesan" => "Data produk tidak lengkap"]);
+        echo json_encode(["pesan" => "produk_id wajib diisi"]);
+        exit;
     }
+    $produkId = (int)$data['produk_id'];
+
+    // Telepon Product Service
+    $hasil = ambilProduk($produkId);
+
+    // Kasus 1: telepon nggak tersambung (Product Service mati)
+    if ($hasil['status'] === 503) {
+        http_response_code(503);
+        echo json_encode(["pesan" => "Product service tidak dapat dihubungi"]);
+        exit;
+    }
+
+    // Kasus 2: produk nggak ada -> teruskan jawaban 404 dari Product Service
+    if ($hasil['status'] === 404) {
+        http_response_code(404);
+        echo json_encode(["pesan" => $hasil['data']['pesan'] ?? "Produk tidak ditemukan"]);
+        exit;
+    }
+
+    // Kasus 3: jawaban aneh (status bukan 200, atau nggak ada nama/harga)
+    $produk = $hasil['data'];
+    if ($hasil['status'] !== 200 || !isset($produk['nama']) || !isset($produk['harga'])) {
+        http_response_code(502);
+        echo json_encode(["pesan" => "Jawaban Product Service tidak valid"]);
+        exit;
+    }
+
+    // Semua aman -> masukkan ke keranjang pakai data ASLI dari Product Service
+    $users[$userId]['keranjang'][] = [
+        "id_produk" => uniqid(),            // id BARIS keranjang (dipakai tombol Hapus), JANGAN diubah
+        "produk_id" => $produkId,           // nomor produk di toko (milik Product Service)
+        "nama"      => $produk['nama'],     // diambil dari Product Service
+        "harga"     => (int)$produk['harga']
+    ];
+    simpanUsers($fileUsers, $users);
+    echo json_encode($users[$userId]);
     exit;
 }
-
 // RUTE 3: Hapus 1 produk spesifik dari keranjang (DELETE)
 if ($method === 'DELETE') {
     $data = json_decode(file_get_contents('php://input'), true);
