@@ -3,3 +3,4 @@
 # Kalau nggak ada, index.php bikin ulang dari data awal.
 product-service/produk.json
 user-service/users.json
+order-service/orders.json

@@ -12,6 +12,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit(0);
 }
 
+// ==========================================
+// USER SERVICE (:5001) = data pelanggan + keranjang belanja
+// Urusan pesanan/struk sudah pindah ke Order Service (:5003).
+// Data disimpan di users.json, milik User Service sendiri.
+// ==========================================
+
 // "Database" kita: file JSON di folder yang sama (menggantikan $_SESSION)
 $fileUsers = __DIR__ . '/users.json';
 
@@ -89,75 +95,30 @@ if (!array_key_exists($userId, $users)) {
     exit;
 }
 
-// RUTE 1: Ambil data lewat GET. Dua "loket" di pintu yang sama,
-// dibedakan oleh parameter ?action=
+// RUTE 1: Ambil profil + isi keranjang (GET)
+// Dipakai frontend buat nampilin profil, dan dipakai Order Service buat membaca keranjang.
 if ($method === 'GET') {
-
-    // Loket 1: ?action=riwayat -> cuma kirim daftar struk
-    // Frontend: "Kasir, minta map struk punya pelanggan nomor 1 aja."
-    if (isset($_GET['action']) && $_GET['action'] === 'riwayat') {
-        // '??' = pakai isi laci 'riwayat' kalau ada,
-        // kalau belum ada (belum pernah checkout) kasih [] kosong, bukan error.
-        $riwayat = $users[$userId]['riwayat'] ?? [];
-        echo json_encode($riwayat);
-        exit;
-    }
-
-    // Loket 2 (bawaan): tanpa action -> kirim profil + keranjang
     echo json_encode($users[$userId]);
     exit;
 }
 
-// RUTE 2: Tambah produk ke keranjang ATAU checkout (POST)
+// RUTE 2: Kosongkan keranjang ATAU tambah produk ke keranjang (POST)
 if ($method === 'POST') {
 
-    // 2.1 Checkout massal: ?action=checkout
-    // Salin isi keranjang jadi "struk" di riwayat, BARU kosongkan keranjang.
-    if (isset($_GET['action']) && $_GET['action'] === 'checkout') {
-
-        // Ambil isi keranjang saat ini (isi troli di meja kasir)
-        $keranjang = $users[$userId]['keranjang'];
-
-        // Penjaga: troli kosong nggak boleh dibuatkan struk
-        if (count($keranjang) === 0) {
-            http_response_code(400);
-            echo json_encode(["pesan" => "Keranjang masih kosong"]);
-            exit;
-        }
-
-        // Hitung total belanja
-        $total = 0;
-        foreach ($keranjang as $item) {
-            $total += $item['harga'];
-        }
-
-        // Susun "struk" pesanan
-        $pesananBaru = [
-            "id_pesanan" => "ORD-" . time(),      // nomor struk unik berbasis waktu
-            "tanggal"    => date("Y-m-d H:i:s"),  // kapan checkout terjadi
-            "item"       => $keranjang,           // salinan isi keranjang
-            "total"      => $total                // total yang dibayar
-        ];
-
-        // Kalau user ini belum punya laci "riwayat" (data lama), buatkan dulu
-        if (!isset($users[$userId]['riwayat'])) {
-            $users[$userId]['riwayat'] = [];
-        }
-
-        // array_unshift = struk baru ditaruh PALING DEPAN (pesanan terbaru di atas)
-        array_unshift($users[$userId]['riwayat'], $pesananBaru);
-
-        // Struk sudah aman, baru kosongkan keranjang
+    // 2.1 Kosongkan keranjang: ?action=kosongkan
+    // Dipanggil ORDER SERVICE setelah pesanan berhasil dicatat.
+    // Order Service: "Pesanannya sudah kucatat, tolong kosongkan trolinya."
+    // User Service : "Siap, trolinya kukosongkan."
+    if (isset($_GET['action']) && $_GET['action'] === 'kosongkan') {
         $users[$userId]['keranjang'] = [];
-
         simpanUsers($fileUsers, $users);
         echo json_encode($users[$userId]);
         exit;
     }
 
     // 2.2 Tambah produk ke keranjang.
-    // Sekarang frontend cukup kirim NOMOR produk: {"produk_id": 101}
-    // Nama dan harga TIDAK lagi dipercaya dari frontend, kita tanya langsung ke Product Service.
+    // Frontend cukup kirim NOMOR produk: {"produk_id": 101}
+    // Nama dan harga TIDAK dipercaya dari frontend, kita tanya langsung ke Product Service.
     $data = json_decode(file_get_contents('php://input'), true);
 
     if (!isset($data['produk_id']) || !is_numeric($data['produk_id'])) {
@@ -203,6 +164,7 @@ if ($method === 'POST') {
     echo json_encode($users[$userId]);
     exit;
 }
+
 // RUTE 3: Hapus 1 produk spesifik dari keranjang (DELETE)
 if ($method === 'DELETE') {
     $data = json_decode(file_get_contents('php://input'), true);

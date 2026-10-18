@@ -1,12 +1,13 @@
 // ==========================================
 // script.js = semua urusan LOGIKA + ngobrol ke API (milik Dimas / leader)
-// Ibarat kurir: nganter permintaan dari halaman ke User Service (5001)
-// dan Product Service (5002), lalu nampilin jawabannya.
+// Ibarat kurir: nganter permintaan dari halaman ke User Service (5001),
+// Product Service (5002), dan Order Service (5003), lalu nampilin jawabannya.
 // ==========================================
 
 let currentUserId = 1;
 let listItemKeranjang = []; // Variabel global penampung keranjang
-
+// Alamat Order Service (kasir + arsip struk)
+const API_ORDER = 'http://localhost:5003/';
 // 1. Memuat Informasi Pengguna & Keranjang
 function muatDataPengguna(id) {
     currentUserId = id;
@@ -91,12 +92,12 @@ function gantiAkun(idBaru) {
 }
 
 // ==========================================
-// RIWAYAT PESANAN (User Service, Port 5001)
+// RIWAYAT PESANAN (Order Service, Port 5003)
 // ==========================================
 
 function muatRiwayat(id) {
     // Frontend: "Kasir, minta map struk punya pelanggan nomor sekian."
-    fetch(`http://localhost:5001/?id=${id}&action=riwayat`)
+    fetch(`${API_ORDER}?user_id=${id}`)
         .then(res => res.json())
         .then(riwayat => {
             const container = document.getElementById('riwayat-list');
@@ -125,10 +126,11 @@ function muatRiwayat(id) {
                 container.appendChild(div);
             });
         })
-        .catch(err => console.error("Gagal memuat riwayat dari User Service"));
+        .catch(err => console.error("Gagal memuat riwayat dari Order Service"));
 }
 
 // Proses Checkout Massal Terhubung Server
+// Checkout sekarang ditangani ORDER SERVICE (:5003), bukan User Service lagi.
 function prosesCheckout() {
     if (listItemKeranjang.length === 0) {
         alert("Keranjang belanja Anda masih kosong! Silakan pilih produk terlebih dahulu.");
@@ -141,21 +143,26 @@ function prosesCheckout() {
     let konfirmasi = confirm(`Apakah Anda yakin ingin checkout semua produk ini?\n\n${daftarBelanjaan}\n\n${totalBayar}`);
 
     if (konfirmasi) {
-        fetch(`http://localhost:5001/?id=${currentUserId}&action=checkout`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
+        // Frontend: "Kasir (Order Service), tolong proses troli pelanggan nomor sekian."
+        // Order Service sendiri yang mengambil isi keranjang dari User Service.
+        fetch(`${API_ORDER}?user_id=${currentUserId}`, { method: 'POST' })
+        .then(async res => {
+            const data = await res.json();
+
+            if (res.ok) {
+                alert("🎉 Transaksi Berhasil!\nNomor pesanan: " + data.id_pesanan);
+            } else {
+                // Pesan dari server, misal "User service tidak dapat dihubungi"
+                alert(data.pesan || "Checkout gagal");
+            }
+
+            // Apa pun hasilnya, segarkan tampilan dari server (keranjang + riwayat).
+            // Penting untuk kasus pesanan sudah tercatat tapi keranjang gagal dikosongkan.
+            muatDataPengguna(currentUserId);
         })
-        .then(res => res.json())
-        .then(userUpdated => {
-            alert("🎉 Transaksi Berhasil!\nSemua produk di atas telah sukses diproses.");
-            listItemKeranjang = [];
-            perbaruiTampilanKeranjang(listItemKeranjang);
-            muatRiwayat(currentUserId);   // struk baru langsung muncul
-        })
-        .catch(err => alert("Gagal memproses checkout ke server."));
+        .catch(err => alert("Gagal terhubung ke Order Service"));
     }
 }
-
 // ==========================================
 // MANAJEMEN PRODUK GLOBAL (PORT 5002)
 // ==========================================
