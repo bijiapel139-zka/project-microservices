@@ -1,84 +1,116 @@
 # Arsitektur Aplikasi E-Commerce Mikroservis (PHP Native)
 
-> Ditulis dari kode versi awal `main` (frontend, user-service, product-service).
-> Order Service (:5003) dan integrasi user-service → product-service (versi Zaka/Dimas) belum dimasukkan. Lihat bagian "Rencana update".
+> Berdasarkan kode terbaru di branch `main`.
 
 ## Komponen
 
-| Komponen | Port | Teknologi | Tugas | Penyimpanan data |
-|---|---|---|---|---|
-| Frontend | (dibuka langsung `index.html`) | HTML + JavaScript (fetch) | Dashboard: profil, keranjang, daftar produk | - |
-| User Service | 5001 | PHP native | Profil pengguna, keranjang, checkout | `$_SESSION` (memori server, sementara) |
-| Product Service | 5002 | PHP native | Daftar produk, tambah produk | File `produk.json` |
+| Komponen | Port | Tugas | Data |
+|---|---|---|---|
+| Frontend (`index.html`, `script.js`, `style.css`) | 8000 | Tampilan dan pemanggil API | - |
+| User Service | 5001 | Profil pengguna dan keranjang | `users.json` |
+| Product Service | 5002 | Daftar produk | `produk.json` |
+| Order Service | 5003 | Checkout dan riwayat pesanan | `orders.json` |
 
-Semua service mengembalikan JSON dan mengaktifkan CORS (`Access-Control-Allow-Origin: *`) supaya bisa dipanggil dari browser.
+Prinsip: tiap service punya data sendiri dan berkomunikasi lewat HTTP (JSON). Semua mengaktifkan CORS.
 
 ## Diagram alur
 
 ```mermaid
 flowchart LR
-    B[Browser<br/>Frontend index.html]
+    F[Frontend<br/>:8000]
     U[User Service<br/>:5001]
     P[Product Service<br/>:5002]
-    S[(Session PHP)]
-    J[(produk.json)]
+    O[Order Service<br/>:5003]
+    UD[(users.json)]
+    PD[(produk.json)]
+    OD[(orders.json)]
 
-    B -- "GET /?id= (profil + keranjang)" --> U
-    B -- "POST /?id= (tambah ke keranjang)" --> U
-    B -- "DELETE /?id= (hapus item)" --> U
-    B -- "POST /?id=&action=checkout" --> U
-    U --- S
+    F -- "profil, keranjang, hapus item" --> U
+    F -- "daftar produk" --> P
+    F -- "checkout, riwayat" --> O
 
-    B -- "GET / (daftar produk)" --> P
-    B -- "POST / (tambah produk)" --> P
-    P --- J
+    U -- "ambil detail produk (produk_id)" --> P
+    O -- "baca keranjang" --> U
+    O -- "kosongkan keranjang" --> U
+
+    U --- UD
+    P --- PD
+    O --- OD
 ```
+
+Panah dari frontend adalah panggilan dari browser. Panah antar service (User → Product, Order → User) adalah panggilan service ke service lewat HTTP.
 
 ## Alur utama
 
-### 1. Membuka dashboard
+### 1. Membuka halaman
 ```mermaid
 sequenceDiagram
     participant F as Frontend
-    participant U as User Service :5001
-    participant P as Product Service :5002
+    participant P as Product Service
+    participant U as User Service
+    participant O as Order Service
     F->>P: GET /
-    P-->>F: [daftar produk]
+    P-->>F: daftar produk
     F->>U: GET /?id=1
     U-->>F: profil + keranjang
+    F->>O: GET /?user_id=1
+    O-->>F: riwayat pesanan
 ```
 
-### 2. Memilih produk ke keranjang
+### 2. Menambah produk ke keranjang
 ```mermaid
 sequenceDiagram
     participant F as Frontend
-    participant U as User Service :5001
-    Note over F: Klik "Pilih" pada produk dari Product Service
-    F->>U: POST /?id=1 {nama, harga}
-    U-->>F: data user terbaru (keranjang bertambah)
+    participant U as User Service
+    participant P as Product Service
+    F->>U: POST /?id=1 {produk_id}
+    U->>P: GET /?id=produk_id
+    P-->>U: {id, nama, harga}
+    U->>U: simpan ke keranjang (users.json)
+    U-->>F: data user terbaru
 ```
-Catatan: pada versi awal, frontend mengirim `nama` dan `harga` produk ke User Service. User Service tidak memanggil Product Service.
+Frontend hanya mengirim nomor produk. Nama dan harga selalu diambil dari Product Service. Kalau Product Service mati, User Service membalas 503.
 
 ### 3. Checkout
 ```mermaid
 sequenceDiagram
     participant F as Frontend
-    participant U as User Service :5001
-    F->>U: POST /?id=1&action=checkout
-    U-->>F: data user (keranjang dikosongkan)
+    participant O as Order Service
+    participant U as User Service
+    F->>O: POST /?user_id=1
+    O->>U: GET /?id=1
+    U-->>O: keranjang
+    O->>O: hitung total, simpan pesanan (orders.json)
+    O->>U: POST /?id=1&action=kosongkan
+    U-->>O: keranjang kosong
+    O-->>F: 201 struk pesanan
 ```
+Pesanan disimpan lebih dulu, baru keranjang dikosongkan, supaya pesanan tidak hilang jika pengosongan gagal.
 
-### 4. Menambah produk ke toko
+### 4. Melihat riwayat
 ```mermaid
 sequenceDiagram
     participant F as Frontend
-    participant P as Product Service :5002
-    F->>P: POST / {nama, harga}
-    P->>P: simpan ke produk.json
-    P-->>F: daftar produk terbaru
+    participant O as Order Service
+    F->>O: GET /?user_id=1
+    O-->>F: daftar struk (terbaru di atas)
 ```
 
-## Rencana update (isi setelah merge)
-- Order Service (:5003): checkout dan riwayat pesanan.
-- User Service memanggil Product Service lewat HTTP memakai `produk_id`.
-- Perbarui diagram di atas setelah branch Zaka/Dimas di-merge.
+## Penanganan error antar service
+| Situasi | Hasil |
+|---|---|
+| Product Service mati saat tambah keranjang | User Service membalas 503 |
+| Produk tidak ditemukan | 404 diteruskan ke frontend |
+| User Service mati saat checkout | Order Service membalas 503 |
+| Keranjang kosong saat checkout | 400, struk tidak dibuat |
+| Pesanan tersimpan tapi keranjang gagal dikosongkan | 502 dengan data pesanan |
+
+## Cara menjalankan
+Windows: klik dua kali `run.bat` (menyalakan 4 server dan membuka browser).
+Manual:
+```
+php -S localhost:5001 -t user-service
+php -S localhost:5002 -t product-service
+php -S localhost:5003 -t order-service
+php -S localhost:8000 -t frontend
+```
