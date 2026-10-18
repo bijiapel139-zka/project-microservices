@@ -4,68 +4,118 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard E-Commerce Mikroservis</title>
-    <!-- Sambungin ke file baju (CSS) -->
+    <title>Toko Mikroservis</title>
     <link rel="stylesheet" href="style.css">
+    <!-- tema.js dimuat di <head> supaya tema terpasang SEBELUM halaman digambar,
+         jadi tidak berkedip terang-gelap saat dibuka. -->
+    <script src="tema.js"></script>
 </head>
 
 <body>
 
-    <header>
-        <h1>🛒 Aplikasi E-Commerce (Arsitektur Mikroservis Native)</h1>
-    </header>
-
-    <div class="grid">
-        <!-- SEKTOR 1: Profil Pengguna (Port 5001) -->
-        <div class="card">
-            <h2>👤 Profil Pengguna</h2>
-            <div id="user-info">Memuat data pengguna...</div>
-            <br>
-            <label for="pilih-akun"><strong>Ganti Akun Pelanggan:</strong></label>
-            <select id="pilih-akun" onchange="gantiAkun(this.value)">
-                <option value="1">Budi Santoso (ID: 1)</option>
-                <option value="2">Siti Aminah (ID: 2)</option>
-                <option value="3">Andi Wijaya (ID: 3)</option>
-                <option value="4">Dewi Sartika (ID: 4)</option>
-            </select>
-        </div>
-
-        <!-- SEKTOR 2: Keranjang Belanja (Port 5001) -->
-        <div class="card">
-            <h2>🛒 Produk Pilihan (Keranjang)</h2>
-            <div id="cart-list">Keranjang kosong.</div>
-            <div id="total-harga" class="total-section">Total: Rp 0</div>
-            <button class="btn btn-success" onclick="prosesCheckout()">Check Out Sekarang</button>
-        </div>
-
-        <!-- SEKTOR 3: Daftar Produk & Fitur Tambah Produk (Port 5002) -->
-        <div class="card">
-            <h2>📦 Produk Tersedia</h2>
-
-            <!-- FORMULIR INPUT PRODUK BARU -->
-            <div class="form-tambah">
-                <h3>➕ Tambah Produk ke Toko</h3>
-                <label>Nama Produk:</label>
-                <input type="text" id="input-nama-produk" placeholder="Contoh: Keyboard Mechanical">
-
-                <label>Harga Produk (Rp):</label>
-                <input type="number" id="input-harga-produk" placeholder="Contoh: 450000">
-
-                <button class="btn" onclick="tambahProdukKeToko()">Masukkan ke Daftar Toko</button>
+    <!-- ============ HEADER ============ -->
+    <header class="topbar">
+        <div class="topbar-inner">
+            <div class="brand">
+                <span class="brand-mark">T</span>
+                <div>
+                    <h1>Toko Mikroservis</h1>
+                    <p>User :5001 · Product :5002 · Order :5003</p>
+                </div>
             </div>
 
-            <div id="product-list">Memuat daftar produk...</div>
+            <div class="kontrol">
+                <!-- Pilihan tema. Panel warna kustom ikut ditaruh di sini
+                     (disembunyikan dulu, dibuka lewat bulatan pelangi). -->
+                <div class="tema-wrap">
+                    <div class="tema-pilihan" role="group" aria-label="Pilih tema">
+                        <button class="swatch" data-tema="terang" title="Terang" aria-label="Tema terang"></button>
+                        <button class="swatch" data-tema="gelap" title="Gelap" aria-label="Tema gelap"></button>
+                        <button class="swatch" data-tema="hutan" title="Hutan" aria-label="Tema hutan"></button>
+                        <button class="swatch" data-tema="senja" title="Senja" aria-label="Tema senja"></button>
+                        <button class="swatch swatch-kustom" data-tema="kustom" title="Kustom" aria-label="Tema kustom"
+                            aria-expanded="false"></button>
+                    </div>
+
+                    <div class="kustom" id="panel-kustom" hidden>
+                        <p class="kustom-hint">Pilih satu warna latar dan satu warna aksen. Warna kartu, teks, dan garis
+                            dihitung otomatis.</p>
+                        <div class="kustom-isi">
+                            <div>
+                                <p class="kustom-label">Latar</p>
+                                <!-- 25 tombol warna dibuat oleh tema.js -->
+                                <div class="palet" id="palet-latar" role="group" aria-label="Pilih warna latar"></div>
+                            </div>
+                            <div>
+                                <p class="kustom-label">Aksen</p>
+                                <div class="palet" id="palet-aksen" role="group" aria-label="Pilih warna aksen"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- id dan onchange SAMA seperti sebelumnya, jadi script.js tidak perlu diubah -->
+                <div class="akun">
+                    <label for="pilih-akun">Akun</label>
+                    <select id="pilih-akun" onchange="gantiAkun(this.value)">
+                        <option value="1">Budi Santoso (ID: 1)</option>
+                        <option value="2">Siti Aminah (ID: 2)</option>
+                        <option value="3">Andi Wijaya (ID: 3)</option>
+                        <option value="4">Dewi Sartika (ID: 4)</option>
+                    </select>
+                </div>
+            </div>
         </div>
-    </div>
+    </header>
 
-    <!-- SEKTOR 4: Riwayat Pesanan (data dari User Service, Port 5001) -->
-    <div class="card" style="margin-top: 20px;">
-        <h2>🧾 Riwayat Pesanan</h2>
-        <div id="riwayat-list">Memuat riwayat...</div>
-    </div>
+    <!-- ============ ISI HALAMAN (grid 2 kolom) ============ -->
+    <main class="layout">
 
-    <!-- Sambungin ke file kurir (JavaScript). Wajib di PALING BAWAH,
-         supaya elemen di atas sudah ada sebelum script jalan. -->
+        <!-- KOLOM KIRI: Produk (Product Service, Port 5002) -->
+        <section class="kolom-utama">
+            <div class="card">
+                <h2>Produk</h2>
+
+                <details class="tambah">
+                    <summary>+ Tambah produk ke toko</summary>
+                    <label for="input-nama-produk">Nama produk</label>
+                    <input type="text" id="input-nama-produk" placeholder="Contoh: Keyboard Mechanical">
+
+                    <label for="input-harga-produk">Harga (Rp)</label>
+                    <input type="number" id="input-harga-produk" placeholder="Contoh: 450000">
+
+                    <button class="btn" onclick="tambahProdukKeToko()">Masukkan ke daftar toko</button>
+                </details>
+
+                <div id="product-list">Memuat daftar produk...</div>
+            </div>
+        </section>
+
+        <!-- KOLOM KANAN: Profil + Keranjang (User Service, Port 5001) -->
+        <aside class="kolom-samping">
+            <div class="card">
+                <h2>Profil</h2>
+                <div id="user-info">Memuat data pengguna...</div>
+            </div>
+
+            <div class="card">
+                <h2>Keranjang</h2>
+                <div id="cart-list">Keranjang kosong.</div>
+                <div id="total-harga" class="total-section">Total: Rp 0</div>
+                <button class="btn btn-success" onclick="prosesCheckout()">Check Out Sekarang</button>
+            </div>
+        </aside>
+
+        <!-- BARIS BAWAH (selebar halaman): Riwayat (Order Service, Port 5003) -->
+        <section class="kolom-penuh">
+            <div class="card">
+                <h2>Riwayat Pesanan</h2>
+                <div id="riwayat-list">Memuat riwayat...</div>
+            </div>
+        </section>
+
+    </main>
+
     <script src="script.js"></script>
 </body>
 
