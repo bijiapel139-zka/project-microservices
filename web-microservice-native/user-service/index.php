@@ -18,8 +18,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // Data disimpan di users.json, milik User Service sendiri.
 // ==========================================
 
-// "Database" kita: file JSON di folder yang sama (menggantikan $_SESSION)
-$fileUsers = __DIR__ . '/users.json';
+// "Database" kita: file JSON. Lokasinya bisa diatur lewat environment variable DATA_DIR
+// (di Docker: folder /data yang menempel ke volume). Kalau tidak diatur, pakai folder service ini.
+$folderData = getenv('DATA_DIR') ?: __DIR__;
+$fileUsers  = $folderData . '/users.json';
 
 // Membaca semua data user dari file
 function bacaUsers($file) {
@@ -48,7 +50,9 @@ if (!file_exists($fileUsers)) {
 }
 
 // Alamat Product Service. Ibarat nomor telepon gudang di sebelah.
-const PRODUCT_SERVICE_URL = 'http://localhost:5002/';
+// Dibaca dari environment variable PRODUCT_SERVICE_URL supaya bisa diganti tanpa mengubah kode
+// (di Docker: http://product-service:5002/). Kalau tidak diatur, dipakai alamat localhost seperti biasa.
+define('PRODUCT_SERVICE_URL', getenv('PRODUCT_SERVICE_URL') ?: 'http://localhost:5002/');
 
 // Fungsi ini "menelepon" Product Service buat nanya detail SATU produk.
 // Hasilnya selalu berupa array: ['status' => kode, 'data' => isi jawaban]
@@ -121,12 +125,15 @@ if ($method === 'POST') {
     // Nama dan harga TIDAK dipercaya dari frontend, kita tanya langsung ke Product Service.
     $data = json_decode(file_get_contents('php://input'), true);
 
-    if (!isset($data['produk_id']) || !is_numeric($data['produk_id'])) {
+    // produk_id harus bilangan bulat positif: 101 dan "101" boleh, 101.7 / "abc" / true ditolak.
+    $produkId = $data['produk_id'] ?? null;
+    $produkId = is_bool($produkId) ? false
+              : filter_var($produkId, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+    if ($produkId === false) {
         http_response_code(400);
-        echo json_encode(["pesan" => "produk_id wajib diisi"]);
+        echo json_encode(["pesan" => "produk_id wajib berupa bilangan bulat positif"]);
         exit;
     }
-    $produkId = (int)$data['produk_id'];
 
     // Telepon Product Service
     $hasil = ambilProduk($produkId);

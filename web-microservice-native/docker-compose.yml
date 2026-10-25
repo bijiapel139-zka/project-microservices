@@ -1,0 +1,64 @@
+# ==========================================
+# docker-compose.yml = denah toko: siapa saja yang dinyalakan, dan bagaimana mereka terhubung.
+# Jalankan semuanya:   docker compose up --build
+# Hentikan:            docker compose down
+# Hapus juga datanya:  docker compose down -v
+# ==========================================
+services:
+
+  # Gudang produk
+  product-service:
+    build: ./product-service
+    container_name: toko-product-service
+    ports:
+      - "5002:5002"             # port-laptop : port-container
+    environment:
+      DATA_DIR: /data           # produk.json disimpan di sini
+    volumes:
+      - product-data:/data      # volume sendiri: data produk terpisah dari service lain
+    restart: unless-stopped
+
+  # Bagian pelanggan + keranjang. Memanggil Product Service lewat NAMA service-nya.
+  user-service:
+    build: ./user-service
+    container_name: toko-user-service
+    ports:
+      - "5001:5001"
+    environment:
+      DATA_DIR: /data
+      PRODUCT_SERVICE_URL: http://product-service:5002/   # di dalam Docker, "localhost" = container sendiri
+    volumes:
+      - user-data:/data
+    depends_on:
+      - product-service
+    restart: unless-stopped
+
+  # Kasir + arsip struk. Memanggil User Service lewat nama service-nya.
+  order-service:
+    build: ./order-service
+    container_name: toko-order-service
+    ports:
+      - "5003:5003"
+    environment:
+      DATA_DIR: /data
+      USER_SERVICE_URL: http://user-service:5001/
+    volumes:
+      - order-data:/data
+    depends_on:
+      - user-service
+    restart: unless-stopped
+
+  # Etalase. Dibuka dari browser di laptop, jadi script.js tetap memanggil localhost:5001/5002/5003
+  # (port-port itu sudah dibuka ke laptop oleh service di atas).
+  frontend:
+    build: ./frontend
+    container_name: toko-frontend
+    ports:
+      - "8000:80"
+    restart: unless-stopped
+
+# Tiga volume = tiga "laci data" terpisah, satu per service. Bertahan walau container dihapus.
+volumes:
+  product-data:
+  user-data:
+  order-data:

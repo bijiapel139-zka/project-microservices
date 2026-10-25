@@ -9,8 +9,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit(0);
 }
 
-// Nama file penyimpan data produk lokal
-$fileJson = __DIR__ . '/produk.json';
+// File penyimpan data produk. Lokasinya bisa diatur lewat environment variable DATA_DIR
+// (di Docker: folder /data yang menempel ke volume). Kalau tidak diatur, pakai folder service ini.
+$folderData = getenv('DATA_DIR') ?: __DIR__;
+$fileJson   = $folderData . '/produk.json';
 
 // Jika file JSON belum ada, buat pertama kali dengan data default
 if (!file_exists($fileJson)) {
@@ -27,6 +29,10 @@ if (!file_exists($fileJson)) {
 
 // Membaca data produk terbaru dari file JSON
 $products = json_decode(file_get_contents($fileJson), true);
+// Kalau file kosong atau rusak, jangan sampai service error.
+if (!is_array($products)) {
+    $products = [];
+}
 $method = $_SERVER['REQUEST_METHOD'];
 
 // RUTE 1: Ambil data produk lewat GET.
@@ -64,12 +70,23 @@ if ($method === 'GET') {
 if ($method === 'POST') {
     $data = json_decode(file_get_contents('php://input'), true);
     
-    if (!empty($data['nama']) && isset($data['harga'])) {
+    // Validasi: nama harus teks tidak kosong, harga harus bilangan bulat >= 0
+    // (sebelumnya harga negatif lolos, padahal bisa mengacaukan total belanja).
+    $nama  = (isset($data['nama']) && is_string($data['nama'])) ? trim($data['nama']) : '';
+    $harga = (isset($data['harga']) && !is_bool($data['harga']))
+           ? filter_var($data['harga'], FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]])
+           : false;
+
+    if ($nama !== '' && $harga !== false) {
+        // ID baru = ID terbesar yang ada + 1 (101-106 sudah dipakai, jadi mulai dari 107).
+        // Selalu berupa angka, tidak lagi teks panjang berbasis waktu.
+        $idBaru = empty($products) ? 101 : max(array_map('intval', array_column($products, 'id'))) + 1;
+
         // Menyusun data produk baru
         $produkBaru = [
-            "id" => time() . rand(10, 99), // ID unik berbasis waktu dan angka acak
-            "nama" => htmlspecialchars($data['nama']),
-            "harga" => (int)$data['harga']
+            "id" => $idBaru,
+            "nama" => htmlspecialchars($nama),
+            "harga" => $harga
         ];
         
         // Memasukkan produk baru ke dalam array produk saat ini
@@ -82,7 +99,7 @@ if ($method === 'POST') {
         echo json_encode($products);
     } else {
         http_response_code(400);
-        echo json_encode(["pesan" => "Nama atau harga produk tidak boleh kosong!"]);
+        echo json_encode(["pesan" => "Nama wajib diisi dan harga harus bilangan bulat >= 0"]);
     }
     exit;
 }
