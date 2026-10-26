@@ -1,67 +1,43 @@
 # Dokumentasi API
 
-> Berdasarkan kode terbaru di branch `main`. Semua endpoint mengembalikan JSON dan mendukung CORS (preflight `OPTIONS` dijawab kosong).
-> Frontend: `http://localhost:8000`. Data disimpan di file JSON (`users.json`, `produk.json`, `orders.json`), dibuat otomatis dan tidak ikut Git.
+Semua service membalas JSON. Pesan error selalu berbentuk `{"pesan": "..."}`. Contoh di bawah sudah dicoba langsung terhadap service yang berjalan.
 
-| Service | URL dasar | Data |
-|---|---|---|
-| User Service | `http://localhost:5001` | `users.json` |
-| Product Service | `http://localhost:5002` | `produk.json` |
-| Order Service | `http://localhost:5003` | `orders.json` |
+## Alamat dasar
 
----
+- User Service: `http://localhost:5001/`
+- Product Service: `http://localhost:5002/`
+- Order Service: `http://localhost:5003/`
 
-## 1. Product Service: `http://localhost:5002`
+CORS dibuka untuk semua asal (`Access-Control-Allow-Origin: *`), supaya frontend di port 8000 boleh memanggil ketiganya.
 
-| Method | URL | Fungsi |
-|---|---|---|
-| GET | `/` | Semua produk |
-| GET | `/?id={id}` | Satu produk (dipakai User Service) |
-| POST | `/` | Tambah produk baru |
+## Kode status yang dipakai
 
-### GET `/`
-Response `200`:
-```json
-[
-  { "id": 101, "nama": "Laptop Asus", "harga": 8500000 },
-  { "id": 102, "nama": "Mouse Logitech", "harga": 250000 },
-  { "id": 103, "nama": "Keyboard Mechanical", "harga": 450000 },
-  { "id": 104, "nama": "Monitor Samsung", "harga": 1500000 },
-  { "id": 105, "nama": "Headset Razer", "harga": 750000 },
-  { "id": 106, "nama": "Kursi Gaming", "harga": 1000000 }
-]
+- **200** berhasil.
+- **201** berhasil membuat data baru (checkout).
+- **400** permintaan tidak valid (data kurang atau salah format).
+- **404** data yang dicari tidak ada.
+- **405** method HTTP tidak didukung.
+- **502** jawaban dari service lain tidak valid, atau langkah lanjutan gagal.
+- **503** service tujuan tidak dapat dihubungi.
+
+## Cara mencoba
+
+Buka `http://localhost:8000`, tekan F12, pilih tab **Console**, lalu tempel contoh seperti ini:
+
+```js
+fetch('http://localhost:5002/?id=101').then(r => r.json()).then(console.log)
 ```
 
-### GET `/?id=101`
-Response `200`:
-```json
-{ "id": 101, "nama": "Laptop Asus", "harga": 8500000 }
-```
-Response `404` jika tidak ada: `{ "pesan": "Produk dengan ID 999 tidak ditemukan" }`
+Untuk request GET sederhana, boleh juga langsung ditulis di address bar browser.
 
-### POST `/`
-Request:
-```json
-{ "nama": "Webcam Logitech", "harga": 600000 }
-```
-Response `200`: seluruh daftar produk terbaru (produk baru di akhir; `id` dibuat otomatis).
-Response `400` jika kosong: `{ "pesan": "Nama atau harga produk tidak boleh kosong!" }`
+## User Service (port 5001)
 
----
+Data pelanggan dan keranjang. Datanya di `users.json`. Parameter `id` adalah nomor pelanggan (1 sampai 4). Kalau `id` tidak diisi, dianggap 1.
 
-## 2. User Service: `http://localhost:5001`
+### GET /?id=1
+Mengambil profil dan isi keranjang.
 
-Pengguna awal: ID 1 Budi Santoso, 2 Siti Aminah, 3 Andi Wijaya, 4 Dewi Sartika. Query `id` default 1. Semua rute memberi `404 { "pesan": "Pengguna tidak ditemukan" }` jika ID tidak ada.
-
-| Method | URL | Fungsi |
-|---|---|---|
-| GET | `/?id={id}` | Profil + isi keranjang (juga dipanggil Order Service) |
-| POST | `/?id={id}` | Tambah produk ke keranjang (body: `produk_id`) |
-| POST | `/?id={id}&action=kosongkan` | Kosongkan keranjang (dipanggil Order Service) |
-| DELETE | `/?id={id}` | Hapus 1 item dari keranjang |
-
-### GET `/?id=1`
-Response `200`:
+Balasan 200:
 ```json
 {
   "id": 1,
@@ -69,95 +45,124 @@ Response `200`:
   "email": "budi@email.com",
   "peran": "Pelanggan VIP",
   "keranjang": [
-    { "id_produk": "11111760000000", "nama": "Laptop Asus", "harga": 8500000 }
+    { "id_produk": "6ad47450b34c0", "produk_id": 102, "nama": "Mouse Logitech", "harga": 250000 }
   ]
 }
 ```
+Catatan: `id_produk` adalah nomor baris di keranjang (dipakai untuk menghapus), sedangkan `produk_id` adalah nomor produk di toko.
 
-### POST `/?id=1` (tambah ke keranjang)
-Frontend hanya mengirim nomor produk. Nama dan harga diambil User Service dari Product Service.
-Request:
+Error: 404 `{"pesan": "Pengguna tidak ditemukan"}`.
+
+### POST /?id=1
+Menambah produk ke keranjang. Body:
 ```json
 { "produk_id": 102 }
 ```
-Response `200`: objek user dengan keranjang terbaru. Item baru berbentuk:
-```json
-{ "id_produk": "6710a1b2c3d4e", "produk_id": 102, "nama": "Mouse Logitech", "harga": 250000 }
-```
-(`id_produk` = ID baris keranjang untuk tombol Hapus; `produk_id` = nomor produk di toko.)
+User Service menanyakan nama dan harga ke Product Service, lalu menyimpan baris keranjangnya. Balasan 200 berupa data pelanggan lengkap (sama seperti GET).
 
 Error:
-| Kode | Penyebab | Body |
-|---|---|---|
-| 400 | `produk_id` kosong / bukan angka | `{ "pesan": "produk_id wajib diisi" }` |
-| 404 | Produk tidak ada di Product Service | `{ "pesan": "Produk dengan ID ... tidak ditemukan" }` |
-| 502 | Jawaban Product Service tidak valid | `{ "pesan": "Jawaban Product Service tidak valid" }` |
-| 503 | Product Service mati | `{ "pesan": "Product service tidak dapat dihubungi" }` |
+- 400 `{"pesan": "produk_id wajib berupa bilangan bulat positif"}` (kosong, 101.7, "abc", true, 0, atau negatif).
+- 404 `{"pesan": "Produk dengan ID 99999 tidak ditemukan"}` (diteruskan dari Product Service).
+- 503 `{"pesan": "Product service tidak dapat dihubungi"}`.
+- 502 `{"pesan": "Jawaban Product Service tidak valid"}`.
 
-### POST `/?id=1&action=kosongkan`
-Request: tanpa body. Response `200`: objek user dengan `"keranjang": []`.
-
-### DELETE `/?id=1` (hapus item)
-Request:
+### DELETE /?id=1
+Menghapus satu baris keranjang. Body:
 ```json
-{ "id_produk": "6710a1b2c3d4e" }
+{ "id_produk": "6ad47450b34c0" }
 ```
-Response `200`: objek user tanpa item tersebut. Response `400` jika `id_produk` tidak ada: `{ "pesan": "ID produk tidak valid" }`
+Balasan 200 berupa data pelanggan terbaru. Kalau `id_produk` tidak cocok dengan baris mana pun, keranjang tidak berubah dan tetap dibalas 200.
 
----
+Error: 400 `{"pesan": "ID produk tidak valid"}` kalau `id_produk` tidak dikirim.
 
-## 3. Order Service: `http://localhost:5003`
+### POST /?id=1&action=kosongkan
+Mengosongkan keranjang. Dipanggil Order Service setelah pesanan dicatat. Balasan 200 berupa data pelanggan dengan `"keranjang": []`.
 
-Semua rute wajib `?user_id={angka >= 1}`, jika tidak: `400 { "pesan": "user_id wajib diisi" }`.
+## Product Service (port 5002)
 
-| Method | URL | Fungsi |
-|---|---|---|
-| GET | `/?user_id={id}` | Riwayat pesanan user (terbaru di atas) |
-| POST | `/?user_id={id}` | Checkout: catat pesanan dari keranjang |
+Daftar produk. Datanya di `produk.json`. Data awal: enam produk dengan id 101 sampai 106.
 
-### GET `/?user_id=1`
-Response `200` (`[]` jika belum ada pesanan):
+### GET /
+Mengambil semua produk.
+
+Balasan 200:
+```json
+[
+  { "id": 101, "nama": "Laptop Asus", "harga": 8500000 },
+  { "id": 102, "nama": "Mouse Logitech", "harga": 250000 }
+]
+```
+
+### GET /?id=101
+Mengambil satu produk.
+
+Balasan 200:
+```json
+{ "id": 101, "nama": "Laptop Asus", "harga": 8500000 }
+```
+
+Error: 404 `{"pesan": "Produk dengan ID 99999 tidak ditemukan"}`. Kalau `id` bukan angka (misalnya `abc`), dianggap 0 dan hasilnya juga 404.
+
+### POST /
+Menambah produk baru. Body:
+```json
+{ "nama": "Webcam HD", "harga": 350000 }
+```
+`harga` harus bilangan bulat 0 atau lebih. Nama disimpan setelah di-escape (`htmlspecialchars`). ID baru adalah ID terbesar yang ada ditambah 1 (misalnya 107).
+
+Balasan 200 berupa **seluruh daftar produk terbaru** (produk baru di urutan terakhir).
+
+Error: 400 `{"pesan": "Nama wajib diisi dan harga harus bilangan bulat >= 0"}`.
+
+Catatan keamanan: endpoint ini belum memakai login, jadi siapa pun bisa menambah produk. Ini batasan yang diakui (lihat dokumen skalabilitas dan ketahanan).
+
+## Order Service (port 5003)
+
+Checkout dan arsip pesanan. Datanya di `orders.json`. Semua rute wajib memakai parameter `user_id`.
+
+Error umum: 400 `{"pesan": "user_id wajib diisi"}` kalau `user_id` kosong, bukan angka, atau kurang dari 1.
+
+### GET /?user_id=1
+Mengambil riwayat pesanan satu pelanggan, terbaru di atas. Kalau belum ada pesanan, balasannya `[]` (bukan error).
+
+Balasan 200:
 ```json
 [
   {
-    "id_pesanan": "ORD-1760000000",
+    "id_pesanan": "ORD-20261024175509-A3F1",
     "user_id": 1,
-    "tanggal": "2026-10-18 17:00:00",
+    "tanggal": "2026-10-24 17:55:09",
     "item": [
-      { "id_produk": "6710a1b2c3d4e", "produk_id": 102, "nama": "Mouse Logitech", "harga": 250000 }
+      { "id_produk": "6ad47450b34c0", "produk_id": 102, "nama": "Mouse Logitech", "harga": 250000 }
     ],
     "total": 250000
   }
 ]
 ```
+Nomor pesanan berformat `ORD-` + tanggal dan jam + 4 karakter acak. Pesanan lama dari versi sebelumnya masih berformat `ORD-` + angka detik.
 
-### POST `/?user_id=1` (checkout)
-Request: tanpa body.
-Langkah di server: ambil keranjang dari User Service → hitung total → simpan pesanan → minta User Service mengosongkan keranjang.
-Response `201`: objek pesanan seperti contoh di atas.
+### POST /?user_id=1
+Checkout. Tidak butuh body. Order Service mengambil keranjang dari User Service, mencatat pesanan, lalu meminta User Service mengosongkan keranjang.
+
+Balasan 201: satu pesanan (bentuknya sama seperti satu elemen riwayat di atas).
 
 Error:
-| Kode | Penyebab | Body |
-|---|---|---|
-| 400 | Keranjang kosong | `{ "pesan": "Keranjang masih kosong" }` |
-| 404 | User tidak ada | `{ "pesan": "Pengguna tidak ditemukan" }` |
-| 502 | Pesanan tersimpan, tapi keranjang gagal dikosongkan | `{ "pesan": "Pesanan tersimpan, tetapi keranjang gagal dikosongkan", "pesanan": { ... } }` |
-| 503 | User Service mati | `{ "pesan": "User service tidak dapat dihubungi" }` |
-| 405 | Method selain GET/POST | `{ "pesan": "Method tidak didukung" }` |
+- 400 `{"pesan": "Keranjang masih kosong"}`.
+- 404 `{"pesan": "Pengguna tidak ditemukan"}`.
+- 503 `{"pesan": "User service tidak dapat dihubungi"}`.
+- 502 `{"pesan": "Jawaban User Service tidak valid"}`.
+- 502 `{"pesan": "Pesanan tersimpan, tetapi keranjang gagal dikosongkan", "pesanan": { ... }}`. Pesanan tetap tercatat, hanya pengosongan keranjang yang gagal.
 
----
+Method selain GET dan POST dibalas 405 `{"pesan": "Method tidak didukung"}`.
 
-## 4. Alur lengkap yang dipakai frontend
+## Alur antar service
 
-| Aksi di halaman | Request |
-|---|---|
-| Buka halaman | `GET :5002/` lalu `GET :5001/?id=1` lalu `GET :5003/?user_id=1` |
-| Ganti akun | `GET :5001/?id=N` lalu `GET :5003/?user_id=N` |
-| Klik "Pilih" produk | `POST :5001/?id=N` dengan `{ "produk_id": ... }` (User Service lalu `GET :5002/?id=...`) |
-| Klik "Hapus" | `DELETE :5001/?id=N` |
-| Klik "Check Out" | `POST :5003/?user_id=N` (Order Service lalu `GET :5001/?id=N` dan `POST :5001/?id=N&action=kosongkan`) |
+- Tambah ke keranjang: frontend → User Service → Product Service (`GET /?id=`).
+- Checkout: frontend → Order Service → User Service (`GET /?id=`, lalu `POST /?id=&action=kosongkan`).
+- Frontend tidak pernah memanggil service lain atas nama service yang sedang diminta. Panggilan antar service punya batas waktu 3 detik.
 
-## 5. Contoh uji dengan curl
+## Contoh uji dengan curl
+
 ```bash
 curl "http://localhost:5002/"
 curl "http://localhost:5002/?id=101"

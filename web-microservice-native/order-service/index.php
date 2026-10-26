@@ -20,10 +20,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 // Alamat User Service. Ibarat nomor telepon bagian pelanggan.
-const USER_SERVICE_URL = 'http://localhost:5001/';
+// Dibaca dari environment variable USER_SERVICE_URL supaya bisa diganti tanpa mengubah kode
+// (di Docker: http://user-service:5001/). Kalau tidak diatur, dipakai alamat localhost seperti biasa.
+define('USER_SERVICE_URL', getenv('USER_SERVICE_URL') ?: 'http://localhost:5001/');
 
-// "Arsip" kita: file JSON di folder yang sama
-$fileOrders = __DIR__ . '/orders.json';
+// "Arsip" kita: file JSON. Lokasinya bisa diatur lewat environment variable DATA_DIR
+// (di Docker: folder /data yang menempel ke volume). Kalau tidak diatur, pakai folder service ini.
+$folderData = getenv('DATA_DIR') ?: __DIR__;
+$fileOrders = $folderData . '/orders.json';
 
 function bacaOrders($file) {
     return json_decode(file_get_contents($file), true);
@@ -68,6 +72,10 @@ function panggilService($url, $method = 'GET') {
 }
 
 $orders = bacaOrders($fileOrders);
+// Kalau arsip kosong atau rusak, jangan sampai service error: anggap belum ada pesanan.
+if (!is_array($orders)) {
+    $orders = [];
+}
 $method = $_SERVER['REQUEST_METHOD'];
 
 // Semua rute butuh user_id yang valid
@@ -130,7 +138,9 @@ if ($method === 'POST') {
 
     // Langkah 3: susun struk dan simpan ke arsip
     $pesananBaru = [
-        "id_pesanan" => "ORD-" . time(),
+        // Nomor struk = tanggal-jam + 4 karakter acak, contoh ORD-20261024175509-A3F1.
+        // Sebelumnya hanya jam (time), jadi dua checkout di detik yang sama bisa kembar.
+        "id_pesanan" => "ORD-" . date("YmdHis") . "-" . strtoupper(bin2hex(random_bytes(2))),
         "user_id"    => $userId,
         "tanggal"    => date("Y-m-d H:i:s"),
         "item"       => $keranjang,
