@@ -160,3 +160,17 @@ Method selain GET dan POST dibalas 405 `{"pesan": "Method tidak didukung"}`.
 - Tambah ke keranjang: frontend → User Service → Product Service (`GET /?id=`).
 - Checkout: frontend → Order Service → User Service (`GET /?id=`, lalu `POST /?id=&action=kosongkan`).
 - Frontend tidak pernah memanggil service lain atas nama service yang sedang diminta. Panggilan antar service punya batas waktu 3 detik.
+
+## Contoh uji dengan curl
+
+```bash
+curl "http://localhost:5002/"
+curl "http://localhost:5002/?id=101"
+curl -X POST "http://localhost:5001/?id=1" -H "Content-Type: application/json" -d '{"produk_id":102}'
+curl "http://localhost:5001/?id=1"
+curl -X POST "http://localhost:5003/?user_id=1"
+curl "http://localhost:5003/?user_id=1"
+# Uji error
+curl "http://localhost:5002/?id=999"
+curl -X POST "http://localhost:5003/?user_id=2"
+```
